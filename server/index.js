@@ -11,11 +11,39 @@ app.use(express.json());
 
 // --- APPLICATIONS API ---
 
+const mapAppRow = (row) => ({
+  id: row.id,
+  category: row.category,
+  organizationName: row.organizationname,
+  applicantName: row.applicantname,
+  position: row.position,
+  phoneNumber: row.phonenumber,
+  alternativePhoneNumber: row.alternativephonenumber,
+  emailAddress: row.emailaddress,
+  residentialAddress: row.residentialaddress,
+  isRegistered: row.isregistered,
+  registrationNumber: row.registrationnumber,
+  briefProfile: row.briefprofile,
+  programmeName: row.programmename,
+  venue: row.venue,
+  lga: row.lga,
+  community: row.community,
+  commencementDate: row.commencementdate,
+  closingDate: row.closingdate,
+  duration: row.duration,
+  dailyTime: row.dailytime,
+  status: row.status,
+  dateApplied: row.dateapplied,
+  approvalDate: row.approvaldate,
+  inspectionNotes: row.inspectionnotes,
+  facilityConditions: row.facilityconditions
+});
+
 // Get all applications
 app.get('/api/applications', async (req, res) => {
   try {
-    const result = await pool.query('SELECT * FROM applications ORDER BY dateApplied DESC');
-    res.json(result.rows);
+    const result = await pool.query('SELECT * FROM applications ORDER BY dateapplied DESC');
+    res.json(result.rows.map(mapAppRow));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -27,7 +55,7 @@ app.get('/api/applications/status/:email', async (req, res) => {
     const email = req.params.email;
     const result = await pool.query('SELECT * FROM applications WHERE LOWER(emailAddress) = LOWER($1)', [email]);
     if (result.rows.length === 0) return res.status(404).json({ error: 'Application not found' });
-    res.json(result.rows[0]);
+    res.json(mapAppRow(result.rows[0]));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -88,6 +116,16 @@ app.put('/api/applications/:id', async (req, res) => {
 
 // --- AUTH & STAFF API ---
 
+const mapStaffRow = (row) => ({
+  id: row.id,
+  name: row.name,
+  email: row.email,
+  role: row.role,
+  status: row.status,
+  dateAdded: row.dateadded,
+  password: row.password
+});
+
 // Login
 app.post('/api/login', async (req, res) => {
   try {
@@ -100,7 +138,8 @@ app.post('/api/login', async (req, res) => {
     if (row.status !== 'Active') return res.status(403).json({ error: 'Account is inactive' });
     
     // Don't send the password back to the client
-    const { password: _, ...user } = row;
+    const mappedUser = mapStaffRow(row);
+    const { password: _, ...user } = mappedUser;
     res.json(user);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -110,8 +149,8 @@ app.post('/api/login', async (req, res) => {
 // Get all staff
 app.get('/api/staff', async (req, res) => {
   try {
-    const result = await pool.query('SELECT id, name, email, role, status, dateAdded FROM staff');
-    res.json(result.rows);
+    const result = await pool.query('SELECT id, name, email, role, status, dateadded FROM staff');
+    res.json(result.rows.map(mapStaffRow));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
