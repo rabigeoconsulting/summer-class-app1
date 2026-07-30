@@ -200,7 +200,7 @@ app.delete('/api/staff/:id', async (req, res) => {
 app.use(express.static(path.join(__dirname, '../dist')));
 
 // Catch-all route to serve the React app
-app.get('*', (req, res) => {
+app.use((req, res) => {
   res.sendFile(path.resolve(__dirname, '../dist', 'index.html'));
 });
 
