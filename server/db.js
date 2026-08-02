@@ -40,16 +40,60 @@ const initializeDatabase = async () => {
         dateApplied TEXT,
         approvalDate TEXT,
         inspectionNotes TEXT,
-        facilityConditions TEXT
+        facilityConditions TEXT,
+        educationLevel TEXT,
+        expectedLearners INTEGER
       )
     `);
 
-    // Add facilityConditions if it doesn't exist
+    // Add new columns if they don't exist
     try {
       await pool.query(`ALTER TABLE applications ADD COLUMN facilityConditions TEXT`);
+    } catch (err) {}
+    try {
+      await pool.query(`ALTER TABLE applications ADD COLUMN educationLevel TEXT`);
+    } catch (err) {}
+    try {
+      await pool.query(`ALTER TABLE applications ADD COLUMN expectedLearners INTEGER`);
+    } catch (err) {}
+
+    // Create settings table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS settings (
+        id INTEGER PRIMARY KEY,
+        portalOpen BOOLEAN DEFAULT true,
+        currentYear TEXT,
+        signatoryName TEXT,
+        signatoryTitle TEXT,
+        signatureData TEXT
+      )
+    `);
+
+    // Initialize settings if empty
+    try {
+      const settingsCountRes = await pool.query(`SELECT COUNT(*) as count FROM settings`);
+      if (parseInt(settingsCountRes.rows[0].count) === 0) {
+        await pool.query(`
+          INSERT INTO settings (id, portalOpen, currentYear, signatoryName, signatoryTitle, signatureData)
+          VALUES (1, true, '2026', 'Hon. Commissioner', 'Ministry of Education', '')
+        `);
+      }
     } catch (err) {
-      // Ignore error if column already exists
+      console.error('Error initializing settings:', err);
     }
+
+    // Create audit_logs table
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS audit_logs (
+        id TEXT PRIMARY KEY,
+        userId TEXT,
+        userName TEXT,
+        userRole TEXT,
+        action TEXT,
+        details TEXT,
+        timestamp TEXT
+      )
+    `);
 
     // Create staff table
     await pool.query(`

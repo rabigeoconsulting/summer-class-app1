@@ -36,7 +36,9 @@ const mapAppRow = (row) => ({
   dateApplied: row.dateapplied,
   approvalDate: row.approvaldate,
   inspectionNotes: row.inspectionnotes,
-  facilityConditions: row.facilityconditions
+  facilityConditions: row.facilityconditions,
+  educationLevel: row.educationlevel,
+  expectedLearners: row.expectedlearners
 });
 
 // Get all applications
@@ -81,15 +83,17 @@ app.post('/api/applications', async (req, res) => {
         id, category, organizationName, applicantName, position, phoneNumber, alternativePhoneNumber,
         emailAddress, residentialAddress, isRegistered, registrationNumber, briefProfile,
         programmeName, venue, lga, community, commencementDate, closingDate, duration, dailyTime,
-        status, dateApplied, approvalDate, inspectionNotes, facilityConditions
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)
+        status, dateApplied, approvalDate, inspectionNotes, facilityConditions, educationLevel, expectedLearners
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27)
     `;
     
     const params = [
       id, data.category, data.organizationName, data.applicantName, data.position, data.phoneNumber, data.alternativePhoneNumber,
       data.emailAddress, data.residentialAddress, data.isRegistered, data.registrationNumber, data.briefProfile,
       data.programmeName, data.venue, data.lga, data.community, data.commencementDate, data.closingDate, data.duration, data.dailyTime,
-      status, dateApplied, approvalDate, inspectionNotes, data.facilityConditions
+      status, dateApplied, approvalDate, inspectionNotes, data.facilityConditions,
+      Array.isArray(data.educationLevel) ? data.educationLevel.join(', ') : data.educationLevel,
+      data.expectedLearners ? parseInt(data.expectedLearners, 10) : null
     ];
     
     await pool.query(query, params);
@@ -103,12 +107,77 @@ app.post('/api/applications', async (req, res) => {
 app.put('/api/applications/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { status, inspectionNotes } = req.body;
+    const { status, inspectionNotes, userId, userName } = req.body;
     const approvalDate = new Date().toISOString().split('T')[0];
 
     const query = `UPDATE applications SET status = $1, inspectionNotes = $2, approvalDate = $3 WHERE id = $4`;
     await pool.query(query, [status, inspectionNotes, approvalDate, id]);
+    
+    if (userId && userName) {
+      await logAction(userId, userName, 'N/A', `Updated Application Status`, `Updated application ${id} to ${status}`);
+    }
+
     res.json({ message: 'Updated successfully' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// --- LOGGING & SETTINGS API ---
+
+const logAction = async (userId, userName, userRole, action, details) => {
+  try {
+    const id = `LOG-${Date.now()}`;
+    const timestamp = new Date().toISOString();
+    await pool.query(
+      `INSERT INTO audit_logs (id, userId, userName, userRole, action, details, timestamp) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [id, userId, userName, userRole, action, details, timestamp]
+    );
+  } catch (err) {
+    console.error('Failed to log action:', err);
+  }
+};
+
+app.get('/api/logs', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM audit_logs ORDER BY timestamp DESC LIMIT 500');
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/settings', async (req, res) => {
+  try {
+    const result = await pool.query('SELECT * FROM settings WHERE id = 1');
+    if (result.rows.length === 0) return res.json({});
+    const row = result.rows[0];
+    res.json({
+      portalOpen: row.portalopen,
+      currentYear: row.currentyear,
+      signatoryName: row.signatoryname,
+      signatoryTitle: row.signatorytitle,
+      signatureData: row.signaturedata
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.put('/api/settings', async (req, res) => {
+  try {
+    const { portalOpen, currentYear, signatoryName, signatoryTitle, signatureData, userId, userName } = req.body;
+    
+    await pool.query(
+      `UPDATE settings SET portalOpen = $1, currentYear = $2, signatoryName = $3, signatoryTitle = $4, signatureData = $5 WHERE id = 1`,
+      [portalOpen, currentYear, signatoryName, signatoryTitle, signatureData]
+    );
+
+    if (userId && userName) {
+      await logAction(userId, userName, 'Super Admin', 'Updated Settings', `Updated portal settings. Portal Open: ${portalOpen}`);
+    }
+
+    res.json({ message: 'Settings updated successfully' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -140,6 +209,9 @@ app.post('/api/login', async (req, res) => {
     // Don't send the password back to the client
     const mappedUser = mapStaffRow(row);
     const { password: _, ...user } = mappedUser;
+    
+    await logAction(user.id, user.name, user.role, 'Login', 'User logged in successfully');
+    
     res.json(user);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -172,6 +244,9 @@ app.post('/api/staff', async (req, res) => {
       `INSERT INTO staff (id, name, email, role, status, dateAdded, password) VALUES ($1, $2, $3, $4, $5, $6, $7)`, 
       [id, name, email, role, status, dateAdded, password]
     );
+    
+    // We can't log who did this easily without receiving it in the body, but let's assume Super Admin
+    await logAction('SYSTEM', 'System', 'Super Admin', 'Created Staff', `Created new staff member: ${name} (${role})`);
     
     res.status(201).json({ id, message: 'Staff added' });
   } catch (err) {
@@ -209,6 +284,9 @@ app.put('/api/staff/:id', async (req, res) => {
     params.push(id);
     
     await pool.query(query, params);
+    
+    await logAction('SYSTEM', 'System', 'Super Admin', 'Updated Staff', `Updated staff member: ${name}`);
+
     res.json({ message: 'Staff updated' });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -229,6 +307,8 @@ app.delete('/api/staff/:id', async (req, res) => {
        return res.status(403).json({ error: 'Cannot delete Super Admin or staff not found' });
     }
     
+    await logAction('SYSTEM', 'System', 'Super Admin', 'Deleted Staff', `Deleted staff member ID: ${id}`);
+
     res.json({ message: 'Staff deleted' });
   } catch (err) {
     res.status(500).json({ error: err.message });
