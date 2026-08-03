@@ -55,8 +55,20 @@ app.get('/api/applications', async (req, res) => {
 app.get('/api/applications/status/:email', async (req, res) => {
   try {
     const email = req.params.email;
-    const result = await pool.query('SELECT * FROM applications WHERE LOWER(emailAddress) = LOWER($1)', [email]);
+    const result = await pool.query('SELECT * FROM applications WHERE LOWER(emailAddress) = LOWER($1) ORDER BY dateapplied DESC LIMIT 1', [email]);
     if (result.rows.length === 0) return res.status(404).json({ error: 'Application not found' });
+    res.json(mapAppRow(result.rows[0]));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get historical application by email (for returning applicants)
+app.get('/api/applications/history/:email', async (req, res) => {
+  try {
+    const email = req.params.email;
+    const result = await pool.query('SELECT * FROM applications WHERE LOWER(emailAddress) = LOWER($1) ORDER BY dateapplied DESC LIMIT 1', [email]);
+    if (result.rows.length === 0) return res.status(404).json({ error: 'No previous application found' });
     res.json(mapAppRow(result.rows[0]));
   } catch (err) {
     res.status(500).json({ error: err.message });
