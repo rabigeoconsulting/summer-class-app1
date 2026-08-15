@@ -7,7 +7,8 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 // --- APPLICATIONS API ---
 
@@ -169,7 +170,8 @@ app.get('/api/settings', async (req, res) => {
       currentYear: row.currentyear,
       signatoryName: row.signatoryname,
       signatoryTitle: row.signatorytitle,
-      signatureData: row.signaturedata
+      signatureData: row.signaturedata,
+      logoData: row.logodata
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -178,11 +180,11 @@ app.get('/api/settings', async (req, res) => {
 
 app.put('/api/settings', async (req, res) => {
   try {
-    const { portalOpen, currentYear, signatoryName, signatoryTitle, signatureData, userId, userName } = req.body;
+    const { portalOpen, currentYear, signatoryName, signatoryTitle, signatureData, logoData, userId, userName } = req.body;
     
     await pool.query(
-      `UPDATE settings SET portalOpen = $1, currentYear = $2, signatoryName = $3, signatoryTitle = $4, signatureData = $5 WHERE id = 1`,
-      [portalOpen, currentYear, signatoryName, signatoryTitle, signatureData]
+      `UPDATE settings SET portalOpen = $1, currentYear = $2, signatoryName = $3, signatoryTitle = $4, signatureData = $5, logoData = $6 WHERE id = 1`,
+      [portalOpen, currentYear, signatoryName, signatoryTitle, signatureData, logoData]
     );
 
     if (userId && userName) {
