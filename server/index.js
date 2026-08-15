@@ -119,14 +119,14 @@ app.post('/api/applications', async (req, res) => {
 app.put('/api/applications/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { status, inspectionNotes, userId, userName } = req.body;
+    const { status, inspectionNotes, userId, userName, userRole } = req.body;
     const approvalDate = new Date().toISOString().split('T')[0];
 
     const query = `UPDATE applications SET status = $1, inspectionNotes = $2, approvalDate = $3 WHERE id = $4`;
     await pool.query(query, [status, inspectionNotes, approvalDate, id]);
     
     if (userId && userName) {
-      await logAction(userId, userName, 'N/A', `Updated Application Status`, `Updated application ${id} to ${status}`);
+      await logAction(userId, userName, userRole || 'N/A', `Updated Application Status`, `Updated application ${id} to ${status}`);
     }
 
     res.json({ message: 'Updated successfully' });
